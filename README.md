@@ -33,3 +33,4 @@ python manage.py migrate
 python manage.py runserver
 
 
+需要在云片网注册，开发短信验证服务。设置参数在settings.py中
