@@ -177,3 +177,19 @@ APIKEY = ""
 #支付宝相关配置
 private_key_path = os.path.join(BASE_DIR, 'apps/trade/keys/private_2048.txt')
 ali_pub_key_path = os.path.join(BASE_DIR, 'apps/trade/keys/alipay_key_2048.txt')
+
+# #drf缓存 只能有一个
+# REST_FRAMEWORK_EXTENSIONS = {
+#     'DEFAULT_CACHE_RESPONSE_TIMEOUT: 60*15 '
+# }
+
+# #REDIS缓存
+# CACHES = {
+#     "default": {
+#         "BACKEND": "django_redis.cache.RedisCache",
+#         "LOCATION": "redis://127.0.0.1:6379",
+#         "OPTIONS": {
+#             "CLIENT_CLASS": "django_redis.client.DefaultClient",
+#         }
+#     }
+# }
