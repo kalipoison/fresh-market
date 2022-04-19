@@ -60,6 +60,8 @@ goods_list = GoodsListViewSet.as_view({
     'get': 'list',
 })
 
+from trade.views import AlipayView
+from django.views.generic import TemplateView
 urlpatterns = [
     url(r'^xadmin/', xadmin.site.urls),
     url(r'^media/(?P<path>.*)$', serve, {"document_root": MEDIA_ROOT}),
@@ -75,4 +77,6 @@ urlpatterns = [
 
     # jwt的认证接口
     url(r'^login/', obtain_jwt_token),
+
+    url(r'^alipay/return/', AlipayView.as_view(), name="alipay"),
 ]
