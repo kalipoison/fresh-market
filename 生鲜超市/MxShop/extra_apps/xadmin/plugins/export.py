@@ -5,7 +5,6 @@ from future.utils import iteritems
 
 from django.http import HttpResponse
 from django.template import loader
-from django.utils import six
 from django.utils.encoding import force_text, smart_text
 from django.utils.html import escape
 from django.utils.translation import ugettext as _
@@ -166,8 +165,7 @@ class ExportPlugin(BaseAdminPlugin):
         if isinstance(t, bool):
             return _('Yes') if t else _('No')
         t = t.replace('"', '""').replace(',', '\,')
-        cls_str = str if six.PY3 else basestring
-        if isinstance(t, cls_str):
+        if isinstance(t, str):
             t = '"%s"' % t
         return t
 
@@ -220,8 +218,9 @@ class ExportPlugin(BaseAdminPlugin):
 
     def get_response(self, response, context, *args, **kwargs):
         file_type = self.request.GET.get('export_type', 'csv')
+        charset = 'UTF-8' if file_type == 'xml' or file_type == 'json' else 'gbk'
         response = HttpResponse(
-            content_type="%s; charset=UTF-8" % self.export_mimes[file_type])
+            content_type="%s; charset=%s" % (self.export_mimes[file_type], charset))
 
         file_name = self.opts.verbose_name.replace(' ', '_')
         response['Content-Disposition'] = ('attachment; filename=%s.%s' % (

@@ -4,17 +4,17 @@ import copy
 from crispy_forms.utils import TEMPLATE_PACK
 from django import forms
 from django.contrib.contenttypes.models import ContentType
-from django.core.exceptions import PermissionDenied, FieldError
+from django.core.exceptions import PermissionDenied, FieldError, FieldDoesNotExist
 from django.db import models, transaction
 from django.forms.models import modelform_factory, modelform_defines_fields
 from django.http import Http404, HttpResponseRedirect
 from django.template.response import TemplateResponse
-from django.utils import six
 from django.utils.encoding import force_text
 from django.utils.html import escape
 from django.utils.text import capfirst, get_text_list
 from django.template import loader
 from django.utils.translation import ugettext as _
+from django.forms.widgets import Media
 from xadmin import widgets
 from xadmin.layout import FormHelper, Layout, Fieldset, TabHolder, Container, Column, Col, Field
 from xadmin.util import unquote
@@ -87,7 +87,7 @@ class ModelFormAdminView(ModelAdminView):
     def formfield_for_dbfield(self, db_field, **kwargs):
         # If it uses an intermediary model that isn't auto created, don't show
         # a field in admin.
-        if isinstance(db_field, models.ManyToManyField) and not db_field.rel.through._meta.auto_created:
+        if isinstance(db_field, models.ManyToManyField) and not db_field.remote_field.through._meta.auto_created:
             return None
 
         attrs = self.get_field_attrs(db_field, **kwargs)
@@ -193,14 +193,13 @@ class ModelFormAdminView(ModelAdminView):
     def get_form_layout(self):
         layout = copy.deepcopy(self.form_layout)
         arr = self.form_obj.fields.keys()
-        if six.PY3:
-            arr = [k for k in arr]
+        arr = [k for k in arr]
         fields = arr + list(self.get_readonly_fields())
 
         if layout is None:
             layout = Layout(Container(Col('full',
-                Fieldset("", *fields, css_class="unsort no_title"), horizontal=True, span=12)
-            ))
+                                          Fieldset("", *fields, css_class="unsort no_title"), horizontal=True, span=12)
+                                      ))
         elif type(layout) in (list, tuple) and len(layout) > 0:
             if isinstance(layout[0], Column):
                 fs = layout
@@ -223,7 +222,6 @@ class ModelFormAdminView(ModelAdminView):
 
         return layout
 
-    @filter_hook
     def get_form_helper(self):
         helper = FormHelper()
         helper.form_tag = False
@@ -292,8 +290,7 @@ class ModelFormAdminView(ModelAdminView):
             self.save_models()
             self.save_related()
             response = self.post_response()
-            cls_str = str if six.PY3 else basestring
-            if isinstance(response, cls_str):
+            if isinstance(response, str):
                 return HttpResponseRedirect(response)
             else:
                 return response
@@ -333,7 +330,7 @@ class ModelFormAdminView(ModelAdminView):
                                  and (change or new_context['show_delete'])),
             'show_save_as_new': change and self.save_as,
             'show_save_and_add_another': new_context['has_add_permission'] and
-                                (not self.save_as or add),
+                                         (not self.save_as or add),
             'show_save_and_continue': new_context['has_change_permission'],
             'show_save': True
         })
@@ -355,8 +352,12 @@ class ModelFormAdminView(ModelAdminView):
 
     @filter_hook
     def get_media(self):
-        return super(ModelFormAdminView, self).get_media() + self.form_obj.media + \
-            self.vendor('xadmin.page.form.js', 'xadmin.form.css')
+        try:
+            m = self.form_obj.media
+        except:
+            m = Media()
+        return super(ModelFormAdminView, self).get_media() + m + \
+               self.vendor('xadmin.page.form.js', 'xadmin.form.css')
 
 
 class CreateAdminView(ModelFormAdminView):
@@ -379,7 +380,7 @@ class CreateAdminView(ModelFormAdminView):
             for k in initial:
                 try:
                     f = self.opts.get_field(k)
-                except models.FieldDoesNotExist:
+                except FieldDoesNotExist:
                     continue
                 if isinstance(f, models.ManyToManyField):
                     initial[k] = initial[k].split(",")
@@ -423,8 +424,12 @@ class CreateAdminView(ModelFormAdminView):
         request = self.request
 
         msg = _(
-            'The %(name)s "%(obj)s" was added successfully.') % {'name': force_text(self.opts.verbose_name),
-                                                                 'obj': "<a class='alert-link' href='%s'>%s</a>" % (self.model_admin_url('change', self.new_obj._get_pk_val()), force_text(self.new_obj))}
+            'The %(name)s "%(obj)s" was added successfully.') % {
+                  'name': force_text(self.opts.verbose_name),
+                  'obj': "<a class='alert-link' href='%s'>%s</a>" % (
+                      self.model_admin_url('change', self.new_obj._get_pk_val()),
+                      force_text(self.new_obj))
+              }
 
         if "_continue" in request.POST:
             self.message_user(
@@ -432,7 +437,8 @@ class CreateAdminView(ModelFormAdminView):
             return self.model_admin_url('change', self.new_obj._get_pk_val())
 
         if "_addanother" in request.POST:
-            self.message_user(msg + ' ' + (_("You may add another %s below.") % force_text(self.opts.verbose_name)), 'success')
+            self.message_user(msg + ' ' + (_("You may add another %s below.") % force_text(self.opts.verbose_name)),
+                              'success')
             return request.path
         else:
             self.message_user(msg, 'success')
@@ -519,15 +525,17 @@ class UpdateAdminView(ModelFormAdminView):
 
         pk_value = obj._get_pk_val()
 
-        msg = _('The %(name)s "%(obj)s" was changed successfully.') % {'name':
-                                                                       force_text(verbose_name), 'obj': force_text(obj)}
+        msg = _('The %(name)s "%(obj)s" was changed successfully.') % {
+            'name': force_text(verbose_name),
+            'obj': force_text(obj)
+        }
         if "_continue" in request.POST:
             self.message_user(
                 msg + ' ' + _("You may edit it again below."), 'success')
             return request.path
         elif "_addanother" in request.POST:
             self.message_user(msg + ' ' + (_("You may add another %s below.")
-                              % force_text(verbose_name)), 'success')
+                                           % force_text(verbose_name)), 'success')
             return self.model_admin_url('add')
         else:
             self.message_user(msg, 'success')
@@ -539,7 +547,7 @@ class UpdateAdminView(ModelFormAdminView):
             elif self.has_view_permission():
                 change_list_url = self.model_admin_url('changelist')
                 if 'LIST_QUERY' in self.request.session \
-                and self.request.session['LIST_QUERY'][0] == self.model_info:
+                        and self.request.session['LIST_QUERY'][0] == self.model_info:
                     change_list_url += '?' + self.request.session['LIST_QUERY'][1]
                 return change_list_url
             else:
